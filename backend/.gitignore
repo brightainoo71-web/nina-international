@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+.env.*
+.data/
+*.bin
+*.log
+serviceAccountKey.json
+*serviceAccount*.json

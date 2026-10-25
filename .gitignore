@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment Variables & Secrets (CRITICAL SECURITY)
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+serviceAccountKey.json
+*.bin
+
+# Production & Build Artifacts
+dist/
+build/
+.expo/
+web-build/
+*.tsbuildinfo
+
+# Local Database & Storage
+.data/
+backend/.data/
+
+# Logs & Debugging
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.system_generated/
+
+# OS Files
+.DS_Store
+Thumbs.db

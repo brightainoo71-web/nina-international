@@ -1,0 +1,180 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==========================================================
+    // NINA INTERNATIONAL: PRODUCTION FIRESTORE SECURITY RULES
+    // Least Privilege • Deny by Default • 4-Role RBAC Model
+    // ==========================================================
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isUser(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserRole() {
+      return request.auth.token.role;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && getUserRole() == 'admin';
+    }
+
+    function isTeacher() {
+      return isAuthenticated() && getUserRole() == 'teacher';
+    }
+
+    function isStaff() {
+      return isAuthenticated() && getUserRole() == 'staff';
+    }
+
+    function isStudent() {
+      return isAuthenticated() && getUserRole() == 'student';
+    }
+
+    // ----------------------------------------------------------
+    // 1. STRICTLY ISOLATED BACKEND COLLECTIONS (DENY ALL CLIENT DIRECT WRITES)
+    // ----------------------------------------------------------
+    // Credentials, TOTP secrets, Pepper configuration, and OTP challenges
+    // can ONLY be accessed or modified by trusted backend via Firebase Admin SDK.
+    match /privateCredentials/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /authenticationChallenges/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /pepperConfig/{document=**} {
+      allow read, write: if false;
+    }
+
+    // ----------------------------------------------------------
+    // 2. AUDIT LOGS (APPEND-ONLY VIA TRUSTED BACKEND, READ-ONLY FOR ADMIN)
+    // ----------------------------------------------------------
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false; // Append-only from backend
+    }
+
+    // ----------------------------------------------------------
+    // 3. DISASTER RECOVERY BACKUPS & CONFIGURATION RESTORE POINTS
+    // ----------------------------------------------------------
+    match /backupJobs/{jobId} {
+      allow read: if isAdmin();
+      allow write: if false; // Created by backend orchestration
+    }
+
+    match /configurationSnapshots/{snapshotId} {
+      allow read: if isAdmin();
+      allow write: if false; // Managed by trusted backend
+    }
+
+    match /systemSettings/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Only restored/updated through backend
+    }
+
+    // ----------------------------------------------------------
+    // 4. USER PROFILES
+    // ----------------------------------------------------------
+    match /userProfiles/{userId} {
+      // Users can read their own profile; Admin, Staff, and Teachers can read student/faculty profiles
+      allow read: if isUser(userId) || isAdmin() || isStaff() || isTeacher();
+      // Only Admin can update roles or deactivate accounts
+      // Direct client creation is blocked to enforce salt-and-pepper hashing on the backend
+      allow write: if false;
+    }
+
+    // ----------------------------------------------------------
+    // 5. STUDENT RECORDS
+    // ----------------------------------------------------------
+    match /students/{studentId} {
+      // Students can ONLY read their own record (prevent IDOR)
+      allow read: if (isStudent() && resource.data.userId == request.auth.uid)
+                  || isAdmin() || isStaff() || isTeacher();
+      // Only Staff & Admin can create or update student enrolment details
+      allow write: if false; // Routed via trusted backend API
+    }
+
+    // ----------------------------------------------------------
+    // 6. FACULTY & STAFF PROFILES
+    // ----------------------------------------------------------
+    match /teachers/{teacherId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    match /staff/{staffId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    // ----------------------------------------------------------
+    // 7. ACADEMIC STRUCTURE (Classes, Subjects, Timetables, Academic Years)
+    // ----------------------------------------------------------
+    match /classes/{classId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    match /subjects/{subjectId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    match /academicYears/{yearId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    match /timetables/{timetableId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    // ----------------------------------------------------------
+    // 8. ATTENDANCE RECORDS
+    // ----------------------------------------------------------
+    match /attendance/{attendanceId} {
+      // Students can ONLY view their own attendance records
+      allow read: if (isStudent() && resource.data.studentId == request.auth.uid)
+                  || isTeacher() || isStaff() || isAdmin();
+      // Attendance recording must go through backend for validation
+      allow write: if false;
+    }
+
+    // ----------------------------------------------------------
+    // 9. ASSESSMENTS & GRADES
+    // ----------------------------------------------------------
+    match /assessments/{assessmentId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    match /grades/{gradeId} {
+      // Students can ONLY view their own grades (prevents horizontal privilege escalation / IDOR)
+      allow read: if (isStudent() && resource.data.studentId == request.auth.uid)
+                  || isTeacher() || isAdmin();
+      // Grade editing must pass through backend to enforce mandatory change reason & audit log
+      allow write: if false;
+    }
+
+    match /gradeAuditLogs/{logId} {
+      // Only Teachers and Admins can inspect the grade modification audit trail
+      allow read: if isTeacher() || isAdmin();
+      allow write: if false; // Append-only by backend
+    }
+
+    // ----------------------------------------------------------
+    // DEFAULT CATCH-ALL: DENY EVERYTHING ELSE
+    // ----------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
