@@ -45,11 +45,27 @@ export class DatabaseService {
       this.persist();
     }
 
-    // Initialize Firebase Cloud Firestore if serviceAccountKey exists
+    // Initialize Firebase Cloud Firestore if serviceAccountKey or env var exists
+    const saEnv = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
     const saPath = path.resolve(process.cwd(), 'serviceAccountKey.json');
-    if (fs.existsSync(saPath)) {
+    let sa: any = null;
+
+    if (saEnv) {
       try {
-        const sa = JSON.parse(fs.readFileSync(saPath, 'utf8'));
+        sa = JSON.parse(saEnv);
+      } catch (e: any) {
+        console.warn('[DatabaseService] Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON env:', e.message);
+      }
+    } else if (fs.existsSync(saPath)) {
+      try {
+        sa = JSON.parse(fs.readFileSync(saPath, 'utf8'));
+      } catch (e: any) {
+        console.warn('[DatabaseService] Failed to read serviceAccountKey.json:', e.message);
+      }
+    }
+
+    if (sa) {
+      try {
         if (getApps().length === 0) {
           this.firebaseApp = initializeApp({ credential: cert(sa) });
         } else {
@@ -63,7 +79,7 @@ export class DatabaseService {
         this.firestore = null;
       }
     } else {
-      console.log('[DatabaseService] Running in local persistent mode (serviceAccountKey.json not present).');
+      console.log('[DatabaseService] Running in local persistent mode (service account not present).');
     }
 
     this.isInitialized = true;
