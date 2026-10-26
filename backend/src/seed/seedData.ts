@@ -54,7 +54,6 @@ export async function seedDatabaseIfEmpty(): Promise<void> {
   }
 
   console.log('--- Initializing Nina International Secure Database Seed ---');
-  const now = new Date().toISOString();
   const defaultPassword = 'NinaSecurePass2026!';
 
   // ==========================================================

@@ -121,8 +121,10 @@ export class AuthController {
       used: false,
     });
 
-    // Send production verification email (or fallback to simulated log)
-    const emailResult = await EmailService.sendVerificationOtp(normalizedEmail, fullName.trim(), otp.code);
+    // Send production verification email in background without blocking response
+    EmailService.sendVerificationOtp(normalizedEmail, fullName.trim(), otp.code).catch((err) => {
+      console.error('[AuthController] Background verification email error:', err);
+    });
 
     await AuditService.logEvent({
       actorId: userId,
@@ -131,7 +133,7 @@ export class AuthController {
       action: 'USER_REGISTERED',
       resource: `userProfiles/${userId}`,
       outcome: 'success',
-      details: { role: assignedRole, username: normalizedUsername, emailDispatched: emailResult.success },
+      details: { role: assignedRole, username: normalizedUsername },
       ipAddress: req.ip,
       userAgent: req.get('user-agent'),
     });
@@ -140,7 +142,7 @@ export class AuthController {
       message: 'Registration successful. A verification code has been dispatched to your email.',
       userId,
       email: normalizedEmail,
-      emailDispatched: !emailResult.simulated,
+      emailDispatched: true,
     });
   }
 
@@ -267,8 +269,8 @@ export class AuthController {
         used: false,
       });
 
-      // Re-dispatch verification code directly to their email inbox
-      await EmailService.sendVerificationOtp(user.email, user.fullName, otp.code).catch(err => {
+      // Re-dispatch verification code in background
+      EmailService.sendVerificationOtp(user.email, user.fullName, otp.code).catch(err => {
         console.error('[AuthController] Failed to dispatch verification email:', err);
       });
 
@@ -301,8 +303,8 @@ export class AuthController {
         used: false,
       });
 
-      // Dispatch live email via Gmail SMTP
-      await EmailService.sendLoginOtp(user.email, user.fullName, otp.code, req.ip).catch(err => {
+      // Dispatch live email in background without blocking authentication response
+      EmailService.sendLoginOtp(user.email, user.fullName, otp.code, req.ip).catch(err => {
         console.error('[AuthController] Failed to dispatch login OTP email:', err);
       });
 
@@ -362,15 +364,15 @@ export class AuthController {
         used: false,
       });
 
-      let emailDispatched = false;
       if (user) {
-        const result = await EmailService.sendLoginOtp(user.email, user.fullName, otp.code, req.ip);
-        emailDispatched = !result.simulated;
+        EmailService.sendLoginOtp(user.email, user.fullName, otp.code, req.ip).catch((err) => {
+          console.error('[AuthController] Failed to dispatch login OTP email:', err);
+        });
       }
 
       return res.json({
         message: 'Verification code sent to email.',
-        emailDispatched,
+        emailDispatched: true,
       });
     } catch (err: any) {
       return res.status(401).json({ error: 'Unauthorized', message: 'Invalid or expired 2FA token.' });

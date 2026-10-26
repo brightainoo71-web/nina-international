@@ -90,13 +90,19 @@ export class EmailService {
 
     if (transporter && ENV.EMAIL_PROVIDER !== 'simulated') {
       try {
-        const info = await transporter.sendMail({
+        const sendPromise = transporter.sendMail({
           from: ENV.EMAIL_FROM,
           to: options.to,
           subject: options.subject,
           text: options.text,
           html: options.html,
         });
+
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('SMTP connection timed out after 3000ms')), 3000)
+        );
+
+        const info: any = await Promise.race([sendPromise, timeoutPromise]);
 
         console.log(`[EmailService] Live email dispatched to <${options.to}> (ID: ${info.messageId})`);
         return {
