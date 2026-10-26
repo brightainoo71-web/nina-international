@@ -29,7 +29,10 @@ export class ApiClient {
 
     if (!res.ok) {
       const errorMsg = data.message || data.error || 'Network request failed';
-      throw new Error(errorMsg);
+      const error = new Error(errorMsg) as any;
+      error.status = res.status;
+      error.data = data;
+      throw error;
     }
 
     return data as T;

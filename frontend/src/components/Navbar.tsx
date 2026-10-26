@@ -35,6 +35,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab }) => 
         { id: 'config-restore', label: 'Restore Points', icon: History },
         { id: 'aws-backups', label: 'Disaster Recovery', icon: Database },
         { id: 'users', label: 'User Management', icon: Users },
+        { id: 'security-settings', label: '2FA Settings', icon: ShieldCheck },
         { id: 'school-records', label: 'School Records', icon: FileText },
       ];
     }
@@ -42,19 +43,21 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab }) => 
       return [
         { id: 'teacher-classes', label: 'My Classes & Attendance', icon: School },
         { id: 'teacher-grades', label: 'Assessment & Grades', icon: FileText },
+        { id: 'security-settings', label: '2FA Settings', icon: ShieldCheck },
       ];
     }
     if (role === 'staff') {
       return [
         { id: 'staff-enrolment', label: 'Student Enrolment', icon: Users },
         { id: 'staff-roster', label: 'School Rosters', icon: School },
+        { id: 'security-settings', label: '2FA Settings', icon: ShieldCheck },
       ];
     }
     // Student
     return [
       { id: 'student-overview', label: 'My Profile & Grades', icon: School },
       { id: 'student-timetable', label: 'My Timetable', icon: FileText },
-      { id: 'student-security', label: '2FA & Security', icon: ShieldCheck },
+      { id: 'security-settings', label: '2FA Settings', icon: ShieldCheck },
     ];
   };
 

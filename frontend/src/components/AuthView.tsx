@@ -70,7 +70,14 @@ export const AuthView: React.FC = () => {
         setSuccessMsg('Security Verification Required: A 6-digit verification code has been dispatched to your email address.');
       }
     } catch (err: any) {
-      setError(err.message || 'Login failed. Please check your credentials.');
+      if (err.data?.requiresEmailVerification && err.data?.userId) {
+        setRegisteredUserId(err.data.userId);
+        setEmailVerifyCode('');
+        setSuccessMsg(err.message || 'Please enter the 6-digit verification code sent to your email.');
+        setMode('verify_email');
+      } else {
+        setError(err.message || 'Login failed. Please check your credentials.');
+      }
     } finally {
       setLoading(false);
     }

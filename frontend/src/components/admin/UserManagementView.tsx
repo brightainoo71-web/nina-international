@@ -70,6 +70,29 @@ export const UserManagementView: React.FC = () => {
     }
   };
 
+  const handleToggle2FA = async (user: UserProfile) => {
+    const isCurrentlyEnabled = user.totpEnabled || user.twoFactorMethod === 'email' || user.twoFactorMethod === 'totp';
+    const enable = !isCurrentlyEnabled;
+    try {
+      await ApiClient.patch(`/users/${user.id}/2fa`, {
+        enabled: enable,
+        method: 'email',
+      });
+      fetchUsers();
+    } catch (err: any) {
+      alert('Failed to update 2FA: ' + err.message);
+    }
+  };
+
+  const handleVerifyEmail = async (user: UserProfile) => {
+    try {
+      await ApiClient.post(`/users/${user.id}/verify-email`, {});
+      fetchUsers();
+    } catch (err: any) {
+      alert('Failed to verify email: ' + err.message);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -190,9 +213,17 @@ export const UserManagementView: React.FC = () => {
 
                     <td className="py-3 px-4">
                       {u.totpEnabled ? (
-                        <span className="text-emerald-600 font-medium">TOTP Active</span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                          TOTP Authenticator
+                        </span>
+                      ) : u.twoFactorMethod === 'email' ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Email OTP Active
+                        </span>
                       ) : (
-                        <span className="text-slate-400">Email OTP</span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200">
+                          Disabled
+                        </span>
                       )}
                     </td>
 
@@ -200,7 +231,31 @@ export const UserManagementView: React.FC = () => {
                       {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : 'Never'}
                     </td>
 
-                    <td className="py-3 px-4 text-right space-x-1.5">
+                    <td className="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                      {!u.emailVerified && (
+                        <button
+                          onClick={() => handleVerifyEmail(u)}
+                          className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded text-[11px] font-medium"
+                          title="Verify email address"
+                        >
+                          Verify Email
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => handleToggle2FA(u)}
+                        className={`px-2 py-1 rounded text-[11px] font-medium border ${
+                          u.twoFactorMethod === 'email' || u.twoFactorMethod === 'totp' || u.totpEnabled
+                            ? 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                            : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 font-semibold'
+                        }`}
+                        title="Toggle Two-Factor Authentication"
+                      >
+                        {u.twoFactorMethod === 'email' || u.twoFactorMethod === 'totp' || u.totpEnabled
+                          ? 'Disable 2FA'
+                          : 'Enable 2FA'}
+                      </button>
+
                       <button
                         onClick={() => {
                           setTargetUser(u);

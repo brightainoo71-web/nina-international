@@ -83,7 +83,7 @@ export class AuthController {
       status: 'active',
       emailVerified: false,
       totpEnabled: false,
-      twoFactorMethod: 'none',
+      twoFactorMethod: 'email',
       createdAt: now,
       updatedAt: now,
     };
@@ -255,8 +255,34 @@ export class AuthController {
       lastVerifiedAt: new Date().toISOString(),
     });
 
-    // Determine 2FA Requirement
-    const requires2FA = user.totpEnabled || user.twoFactorMethod !== 'none';
+    // 1. Mandatory Email Verification Check: Unverified users cannot enter the system
+    if (!user.emailVerified) {
+      const otp = TwoFactorService.generateEmailOtp();
+      await DatabaseService.setDocument('authenticationChallenges', `otp_${user.id}`, {
+        id: `otp_${user.id}`,
+        userId: user.id,
+        type: 'email_verification',
+        codeHash: otp.codeHash,
+        expiresAt: otp.expiresAt,
+        used: false,
+      });
+
+      // Re-dispatch verification code directly to their email inbox
+      await EmailService.sendVerificationOtp(user.email, user.fullName, otp.code).catch(err => {
+        console.error('[AuthController] Failed to dispatch verification email:', err);
+      });
+
+      return res.status(403).json({
+        error: 'Email Not Verified',
+        message: 'Your email address is pending verification. A fresh 6-digit verification code has been dispatched to your email.',
+        requiresEmailVerification: true,
+        userId: user.id,
+        email: user.email,
+      });
+    }
+
+    // 2. Determine 2FA Requirement: Enforced for all admin accounts or users with twoFactorMethod !== 'none'
+    const requires2FA = user.twoFactorMethod === 'email' || user.twoFactorMethod === 'totp' || user.totpEnabled || user.role === 'admin';
 
     if (requires2FA) {
       const pendingToken = TokenService.generate2FAPendingToken(user);
@@ -276,7 +302,7 @@ export class AuthController {
       });
 
       // Dispatch live email via Gmail SMTP
-      EmailService.sendLoginOtp(user.email, user.fullName, otp.code, req.ip).catch(err => {
+      await EmailService.sendLoginOtp(user.email, user.fullName, otp.code, req.ip).catch(err => {
         console.error('[AuthController] Failed to dispatch login OTP email:', err);
       });
 

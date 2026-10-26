@@ -20,6 +20,7 @@ import { StaffDashboard } from './components/staff/StaffDashboard.js';
 
 // Student Views
 import { StudentDashboard } from './components/student/StudentDashboard.js';
+import { SecuritySettingsView } from './components/SecuritySettingsView.js';
 
 const MainLayout: React.FC = () => {
   const { user, loading } = useAuth();
@@ -44,6 +45,10 @@ const MainLayout: React.FC = () => {
 
   // Set appropriate default tab when role changes
   const renderContent = () => {
+    if (currentTab === 'security-settings') {
+      return <SecuritySettingsView />;
+    }
+
     const role = user.role;
 
     if (role === 'admin') {

@@ -67,34 +67,34 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigate }) => {
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-              Enrolled Students
+              Total Registered Users
             </span>
             <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-              <GraduationCap className="w-4 h-4" />
+              <Users className="w-4 h-4" />
             </div>
           </div>
           <div className="text-2xl font-extrabold text-slate-900 mt-2">
-            {loading ? '...' : metrics?.activeStudents ?? 0}
+            {loading ? '...' : metrics?.totalUsers ?? 0}
           </div>
           <div className="text-[11px] text-slate-500 mt-1">
-            Total registered: <span className="font-semibold text-slate-700">{metrics?.totalStudents ?? 0}</span>
+            Active in system: <span className="font-semibold text-emerald-600">{metrics?.activeUsers ?? 0}</span>
           </div>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-              Academic Faculty
+              Administrators & Faculty
             </span>
             <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <Users className="w-4 h-4" />
+              <ShieldCheck className="w-4 h-4" />
             </div>
           </div>
           <div className="text-2xl font-extrabold text-slate-900 mt-2">
-            {loading ? '...' : metrics?.totalTeachers ?? 0}
+            {loading ? '...' : (metrics?.totalAdmins ?? 0) + (metrics?.totalTeachers ?? 0) + (metrics?.totalStaff ?? 0)}
           </div>
           <div className="text-[11px] text-slate-500 mt-1">
-            Staff & admin: <span className="font-semibold text-slate-700">{metrics?.totalStaff ?? 0}</span>
+            Admins: <span className="font-semibold text-blue-600">{metrics?.totalAdmins ?? 0}</span> • Faculty: <span className="font-semibold text-slate-700">{(metrics?.totalTeachers ?? 0) + (metrics?.totalStaff ?? 0)}</span>
           </div>
         </div>
 

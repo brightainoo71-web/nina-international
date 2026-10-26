@@ -13,6 +13,7 @@ import {
   AssessmentRecord,
   GradeRecord,
   GradeAuditLog,
+  UserProfile,
 } from '../types/shared.js';
 
 export class SchoolService {
@@ -20,6 +21,7 @@ export class SchoolService {
   // DASHBOARD ANALYTICS (100% Data-Driven)
   // ==========================================
   public static async getDashboardMetrics(userRole: string, userId: string) {
+    const userProfiles = await DatabaseService.getCollection<UserProfile>('userProfiles');
     const students = await DatabaseService.getCollection<StudentRecord>('students');
     const teachers = await DatabaseService.getCollection<TeacherRecord>('teachers');
     const staff = await DatabaseService.getCollection<StaffRecord>('staff');
@@ -27,10 +29,13 @@ export class SchoolService {
     const attendance = await DatabaseService.getCollection<AttendanceRecord>('attendance');
     const grades = await DatabaseService.getCollection<GradeRecord>('grades');
 
-    const totalStudents = students.length;
-    const activeStudents = students.filter(s => s.enrolmentStatus === 'enrolled').length;
-    const totalTeachers = teachers.length;
-    const totalStaff = staff.length;
+    const totalUsers = userProfiles.length;
+    const activeUsers = userProfiles.filter(u => u.status === 'active').length;
+    const totalAdmins = userProfiles.filter(u => u.role === 'admin' && u.status !== 'deleted').length;
+    const totalTeachers = Math.max(teachers.length, userProfiles.filter(u => u.role === 'teacher' && u.status !== 'deleted').length);
+    const totalStaff = Math.max(staff.length, userProfiles.filter(u => u.role === 'staff' && u.status !== 'deleted').length);
+    const totalStudents = Math.max(students.length, userProfiles.filter(u => u.role === 'student' && u.status !== 'deleted').length);
+    const activeStudents = totalStudents;
     const totalClasses = classes.length;
 
     // Calculate attendance rate
@@ -46,6 +51,9 @@ export class SchoolService {
     const averageScore = grades.length > 0 ? Math.round(totalScores / grades.length) : 0;
 
     return {
+      totalUsers,
+      activeUsers,
+      totalAdmins,
       totalStudents,
       activeStudents,
       totalTeachers,
