@@ -281,8 +281,8 @@ export class AuthController {
       });
     }
 
-    // 2. Determine 2FA Requirement: Enforced for all admin accounts or users with twoFactorMethod !== 'none'
-    const requires2FA = user.twoFactorMethod === 'email' || user.twoFactorMethod === 'totp' || user.totpEnabled || user.role === 'admin';
+    // 2. Determine 2FA Requirement: Enforced system-wide across all user roles (Students, Teachers, Staff, Admins)
+    const requires2FA = user.twoFactorMethod !== 'none' || user.totpEnabled || ['admin', 'teacher', 'staff', 'student'].includes(user.role);
 
     if (requires2FA) {
       const pendingToken = TokenService.generate2FAPendingToken(user);
