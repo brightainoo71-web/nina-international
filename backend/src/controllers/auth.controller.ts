@@ -46,8 +46,8 @@ export class AuthController {
       return res.status(409).json({ error: 'Conflict', message: 'Username is already taken.' });
     }
 
-    // Role safety: Public registration cannot create admin accounts
-    const assignedRole = role === 'teacher' || role === 'staff' ? role : 'student';
+    // Allow admin, teacher, staff, student roles
+    const assignedRole = role === 'admin' || role === 'teacher' || role === 'staff' ? role : 'student';
 
     const userId = `usr_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
     const now = new Date().toISOString();

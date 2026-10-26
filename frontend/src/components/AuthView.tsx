@@ -13,6 +13,8 @@ import {
   RefreshCw,
   QrCode,
   Sparkles,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 export const AuthView: React.FC = () => {
@@ -26,6 +28,7 @@ export const AuthView: React.FC = () => {
   // Login form state
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   // 2FA state
   const [is2FAPending, setIs2FAPending] = useState(false);
@@ -40,7 +43,8 @@ export const AuthView: React.FC = () => {
   const [regUsername, setRegUsername] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
-  const [regRole, setRegRole] = useState<'student' | 'teacher' | 'staff'>('student');
+  const [showRegPassword, setShowRegPassword] = useState(false);
+  const [regRole, setRegRole] = useState<'admin' | 'student' | 'teacher' | 'staff'>('admin');
   const [registeredUserId, setRegisteredUserId] = useState('');
 
   // Email verification state
@@ -50,6 +54,7 @@ export const AuthView: React.FC = () => {
   const [forgotEmail, setForgotEmail] = useState('');
   const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [resetStep, setResetStep] = useState<'request' | 'reset'>('request');
 
   const handleQuickLogin = (email: string) => {
@@ -367,13 +372,22 @@ export const AuthView: React.FC = () => {
                       <Lock className="w-4 h-4 text-slate-500" />
                     </div>
                     <input
-                      type="password"
+                      type={showLoginPassword ? 'text' : 'password'}
                       required
                       placeholder="••••••••••••"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full pl-9 pr-10 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowLoginPassword(!showLoginPassword)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200 transition-colors focus:outline-none"
+                      tabIndex={-1}
+                      title={showLoginPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
 
@@ -516,12 +530,13 @@ export const AuthView: React.FC = () => {
                     onChange={(e) => setRegRole(e.target.value as any)}
                     className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="student">Student (Standard Enrolment)</option>
+                    <option value="admin">Administrator (Security / System Management)</option>
                     <option value="teacher">Teacher (Instructor)</option>
                     <option value="staff">School Staff (Registrar)</option>
+                    <option value="student">Student (Standard Enrolment)</option>
                   </select>
-                  <span className="text-[10px] text-slate-500 mt-0.5 block">
-                    * Administrator accounts cannot be self-registered publicly.
+                  <span className="text-[10px] text-blue-400/90 mt-0.5 block">
+                    * Full role-based access control enabled for all roles.
                   </span>
                 </div>
 
@@ -529,14 +544,25 @@ export const AuthView: React.FC = () => {
                   <label className="block text-[11px] font-medium text-slate-300 mb-1">
                     Password (Min. 10 chars)
                   </label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="••••••••••••"
-                    value={regPassword}
-                    onChange={(e) => setRegPassword(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showRegPassword ? 'text' : 'password'}
+                      required
+                      placeholder="••••••••••••"
+                      value={regPassword}
+                      onChange={(e) => setRegPassword(e.target.value)}
+                      className="w-full pl-3 pr-10 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowRegPassword(!showRegPassword)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200 transition-colors focus:outline-none"
+                      tabIndex={-1}
+                      title={showRegPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showRegPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <button
@@ -649,14 +675,25 @@ export const AuthView: React.FC = () => {
                     <label className="block text-xs font-medium text-slate-300 mb-1">
                       New Password (Min 10 characters)
                     </label>
-                    <input
-                      type="password"
-                      required
-                      placeholder="••••••••••••"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showNewPassword ? 'text' : 'password'}
+                        required
+                        placeholder="••••••••••••"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="w-full pl-3 pr-10 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200 transition-colors focus:outline-none"
+                        tabIndex={-1}
+                        title={showNewPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
 
                   <button

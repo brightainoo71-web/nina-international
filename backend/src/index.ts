@@ -33,8 +33,17 @@ app.use(
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow mobile apps (no origin) or explicitly permitted development/production origins
-      if (!origin || ENV.ALLOWED_ORIGINS.includes(origin) || origin.startsWith('http://localhost:')) {
+      // Allow mobile apps (no origin), localhost, firebase domains, or configured origins
+      if (
+        !origin ||
+        origin.startsWith('http://localhost:') ||
+        origin.endsWith('.web.app') ||
+        origin.endsWith('.firebaseapp.com') ||
+        origin.endsWith('.vercel.app') ||
+        origin.endsWith('.lhr.life') ||
+        origin.endsWith('.trycloudflare.com') ||
+        ENV.ALLOWED_ORIGINS.includes(origin)
+      ) {
         callback(null, true);
       } else {
         callback(new Error('Blocked by CORS security policy'));
