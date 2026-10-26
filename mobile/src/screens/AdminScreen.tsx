@@ -16,6 +16,7 @@ type AdminTab =
   | 'audit'
   | 'security'
   | 'users'
+  | 'settings'
   | 'records'
   | 'snapshots'
   | 'backups';
@@ -23,6 +24,9 @@ type AdminTab =
 export const AdminScreen: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [loading, setLoading] = useState(true);
+
+  // Current logged in admin
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   // Tab 1: Overview
   const [metrics, setMetrics] = useState<any>(null);
@@ -40,12 +44,22 @@ export const AdminScreen: React.FC<{ onLogout: () => void }> = ({ onLogout }) =>
 
   // Tab 4: User Management
   const [users, setUsers] = useState<any[]>([]);
+  const [userSearch, setUserSearch] = useState('');
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [newUsername, setNewUsername] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState<'admin' | 'teacher' | 'staff' | 'student'>('student');
   const [creatingUser, setCreatingUser] = useState(false);
+
+  // Tab: 2FA Settings
+  const [totpData, setTotpData] = useState<{
+    qrCodeDataUrl?: string;
+    manualEntryKey?: string;
+    recoveryCodes?: string[];
+  } | null>(null);
+  const [verifyTotpCode, setVerifyTotpCode] = useState('');
+  const [enrollingTotp, setEnrollingTotp] = useState(false);
 
   // Tab 5: School Records
   const [classes, setClasses] = useState<any[]>([]);
@@ -64,7 +78,7 @@ export const AdminScreen: React.FC<{ onLogout: () => void }> = ({ onLogout }) =>
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [m, a, l, u, c, s, sn, b] = await Promise.all([
+      const [m, a, l, u, c, s, sn, b, me] = await Promise.all([
         MobileApiClient.get('/school/dashboard').catch(() => null),
         MobileApiClient.get('/credential-audit').catch(() => null),
         MobileApiClient.get('/security/audit-logs').catch(() => null),
@@ -73,9 +87,11 @@ export const AdminScreen: React.FC<{ onLogout: () => void }> = ({ onLogout }) =>
         MobileApiClient.get('/school/subjects').catch(() => null),
         MobileApiClient.get('/security/snapshots').catch(() => null),
         MobileApiClient.get('/backup/jobs').catch(() => null),
+        MobileApiClient.get('/auth/me').catch(() => null),
       ]);
 
       if (m) setMetrics(m);
+      if (me && me.user) setCurrentUser(me.user);
       if (a) {
         setAuditList(a.auditList || []);
         setSystemPepper(a.systemPepperStatus || {});
@@ -199,6 +215,79 @@ export const AdminScreen: React.FC<{ onLogout: () => void }> = ({ onLogout }) =>
     );
   };
 
+  const handleToggle2FA = async (targetUser: any) => {
+    const isCurrentlyEnabled = targetUser.totpEnabled || targetUser.twoFactorMethod === 'email' || targetUser.twoFactorMethod === 'totp';
+    const enable = !isCurrentlyEnabled;
+    try {
+      await MobileApiClient.patch(`/users/${targetUser.id}/2fa`, {
+        enabled: enable,
+        method: 'email',
+      });
+      Alert.alert('2FA Updated', `2FA has been ${enable ? 'enabled' : 'disabled'} for ${targetUser.fullName || targetUser.username}.`);
+      loadAllData();
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to update 2FA');
+    }
+  };
+
+  const handleVerifyEmail = async (targetUser: any) => {
+    try {
+      await MobileApiClient.post(`/users/${targetUser.id}/verify-email`, {});
+      Alert.alert('Email Verified', `Email for ${targetUser.fullName || targetUser.username} marked as verified.`);
+      loadAllData();
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to verify email');
+    }
+  };
+
+  // -------------------------------------------------------------
+  // 2FA Self Settings Handlers
+  // -------------------------------------------------------------
+  const handleStartTotpEnrollment = async () => {
+    setEnrollingTotp(true);
+    try {
+      const data = await MobileApiClient.post('/auth/2fa/setup');
+      setTotpData(data);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to initialize TOTP setup');
+    } finally {
+      setEnrollingTotp(false);
+    }
+  };
+
+  const handleConfirmTotp = async () => {
+    if (!verifyTotpCode) {
+      Alert.alert('Validation', 'Please enter the 6-digit code from your authenticator app.');
+      return;
+    }
+    setEnrollingTotp(true);
+    try {
+      await MobileApiClient.post('/auth/2fa/confirm', { code: verifyTotpCode });
+      Alert.alert('Success', 'Google Authenticator (TOTP) successfully activated!');
+      setTotpData(null);
+      setVerifyTotpCode('');
+      loadAllData();
+    } catch (err: any) {
+      Alert.alert('Verification Failed', err.message || 'Please check your code.');
+    } finally {
+      setEnrollingTotp(false);
+    }
+  };
+
+  const handleSwitchToEmail2FA = async () => {
+    if (!currentUser?.id) return;
+    try {
+      await MobileApiClient.patch(`/users/${currentUser.id}/2fa`, {
+        enabled: true,
+        method: 'email',
+      });
+      Alert.alert('Success', '2FA method set to Email OTP.');
+      loadAllData();
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to update 2FA method');
+    }
+  };
+
   // -------------------------------------------------------------
   // TAB 6: Configuration Snapshots Actions
   // -------------------------------------------------------------
@@ -304,12 +393,13 @@ export const AdminScreen: React.FC<{ onLogout: () => void }> = ({ onLogout }) =>
           {(
             [
               { key: 'overview', label: 'Overview' },
-              { key: 'audit', label: 'Audit & Lab' },
+              { key: 'audit', label: 'Credential Audit' },
               { key: 'security', label: 'Security Centre' },
-              { key: 'users', label: 'Users' },
-              { key: 'records', label: 'Records' },
-              { key: 'snapshots', label: 'Snapshots' },
-              { key: 'backups', label: 'AWS Backups' },
+              { key: 'users', label: 'User Management' },
+              { key: 'settings', label: '2FA Settings' },
+              { key: 'records', label: 'School Records' },
+              { key: 'snapshots', label: 'Restore Points' },
+              { key: 'backups', label: 'Disaster Recovery' },
             ] as { key: AdminTab; label: string }[]
           ).map((tab) => (
             <TouchableOpacity
@@ -334,30 +424,114 @@ export const AdminScreen: React.FC<{ onLogout: () => void }> = ({ onLogout }) =>
         {/* ========================================================= */}
         {activeTab === 'overview' && (
           <View>
+            {/* Welcome Banner matching Web App */}
+            <View style={styles.bannerContainer}>
+              <View style={styles.bannerBadge}>
+                <Text style={styles.bannerBadgeText}>System Operational • Nina International</Text>
+              </View>
+              <Text style={styles.bannerTitle}>
+                Secure Administration & Operations Portal
+              </Text>
+              <Text style={styles.bannerDesc}>
+                Integrated identity access management, live Argon2id password security audit, configuration restore checkpoints, and AWS disaster recovery backups.
+              </Text>
+
+              <View style={styles.bannerBtnRow}>
+                <TouchableOpacity
+                  style={styles.bannerBtnPrimary}
+                  onPress={() => setActiveTab('audit')}
+                >
+                  <Text style={styles.bannerBtnPrimaryText}>Inspect Credential Hashes</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.bannerBtnSecondary}
+                  onPress={() => setActiveTab('security')}
+                >
+                  <Text style={styles.bannerBtnSecondaryText}>View Audit Logs</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Live Data-Driven Metric Cards */}
             <Text style={styles.sectionHeading}>System Health & Metrics</Text>
             <View style={styles.metricsGrid}>
               <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Active Students</Text>
-                <Text style={styles.metricValue}>{metrics?.activeStudents ?? 0}</Text>
+                <Text style={styles.metricLabel}>TOTAL REGISTERED USERS</Text>
+                <Text style={styles.metricValue}>{metrics?.totalUsers ?? 0}</Text>
+                <Text style={styles.metricSub}>
+                  Active in system: <Text style={{ color: '#10b981', fontWeight: 'bold' }}>{metrics?.activeUsers ?? 0}</Text>
+                </Text>
               </View>
+
               <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Faculty Staff</Text>
-                <Text style={styles.metricValue}>{metrics?.totalTeachers ?? 0}</Text>
+                <Text style={styles.metricLabel}>ADMINISTRATORS & FACULTY</Text>
+                <Text style={styles.metricValue}>
+                  {(metrics?.totalAdmins ?? 0) + (metrics?.totalTeachers ?? 0) + (metrics?.totalStaff ?? 0)}
+                </Text>
+                <Text style={styles.metricSub}>
+                  Admins: <Text style={{ color: '#38bdf8', fontWeight: 'bold' }}>{metrics?.totalAdmins ?? 0}</Text> • Faculty: <Text style={{ color: '#cbd5e1', fontWeight: 'bold' }}>{(metrics?.totalTeachers ?? 0) + (metrics?.totalStaff ?? 0)}</Text>
+                </Text>
               </View>
+
               <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Attendance</Text>
+                <Text style={styles.metricLabel}>ATTENDANCE RATE</Text>
                 <Text style={[styles.metricValue, { color: '#10b981' }]}>
                   {metrics?.attendanceRate ?? 100}%
                 </Text>
+                <Text style={[styles.metricSub, { color: '#34d399' }]}>
+                  Live attendance tracking
+                </Text>
               </View>
+
               <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Grade Average</Text>
-                <Text style={[styles.metricValue, { color: '#a855f7' }]}>
+                <Text style={styles.metricLabel}>CLASS GRADE AVERAGE</Text>
+                <Text style={[styles.metricValue, { color: '#c084fc' }]}>
                   {metrics?.averageScore ?? 0}%
+                </Text>
+                <Text style={styles.metricSub}>
+                  Across recorded assessments
                 </Text>
               </View>
             </View>
 
+            {/* Security Principles Implemented in Nina International (Academic Evaluators) */}
+            <View style={styles.principlesContainer}>
+              <View style={styles.principlesHeader}>
+                <Text style={styles.principlesTitle}>
+                  Security Principles Implemented in Nina International
+                </Text>
+              </View>
+
+              <View style={styles.principleCard}>
+                <Text style={styles.principle1Title}>
+                  1. Password Salt & Server Pepper
+                </Text>
+                <Text style={styles.principleText}>
+                  Argon2id (64MB memory, 3 iterations, 4 threads) combined with a cryptographically unique 128-bit salt per account, plus a server-side HMAC-SHA256 pepper managed separately from the database records.
+                </Text>
+              </View>
+
+              <View style={styles.principleCard}>
+                <Text style={styles.principle2Title}>
+                  2. Two-Factor Authentication (2FA)
+                </Text>
+                <Text style={styles.principleText}>
+                  RFC 6238 TOTP (Google Authenticator compatible) with secrets encrypted at rest using AES-256-GCM, alongside short-lived, single-use, brute-force-protected Email OTP.
+                </Text>
+              </View>
+
+              <View style={styles.principleCard}>
+                <Text style={styles.principle3Title}>
+                  3. Data Integrity & Disaster Recovery
+                </Text>
+                <Text style={styles.principleText}>
+                  Configuration snapshots with SHA-256 checksums, automated AES-256-GCM encrypted backup exports to AWS S3, and strict separation between config restoration and student records.
+                </Text>
+              </View>
+            </View>
+
+            {/* Cryptographic Safeguards Active */}
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Cryptographic Safeguards Active</Text>
               <Text style={styles.cardSubtitle}>
@@ -494,7 +668,12 @@ export const AdminScreen: React.FC<{ onLogout: () => void }> = ({ onLogout }) =>
         {activeTab === 'users' && (
           <View>
             <View style={styles.rowBetween}>
-              <Text style={styles.sectionHeading}>User Accounts</Text>
+              <View>
+                <Text style={styles.sectionHeading}>User & Identity Governance</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Soft-deletion, 2FA enforcement, and email verification.
+                </Text>
+              </View>
               <TouchableOpacity
                 style={styles.actionBtn}
                 onPress={() => setShowCreateUser(!showCreateUser)}
@@ -502,6 +681,15 @@ export const AdminScreen: React.FC<{ onLogout: () => void }> = ({ onLogout }) =>
                 <Text style={styles.actionBtnText}>{showCreateUser ? 'Cancel' : '+ New User'}</Text>
               </TouchableOpacity>
             </View>
+
+            {/* User Search Input */}
+            <TextInput
+              style={[styles.input, { marginTop: 0, marginBottom: 12 }]}
+              placeholder="Search users by name, email, or role..."
+              placeholderTextColor="#64748b"
+              value={userSearch}
+              onChangeText={setUserSearch}
+            />
 
             {/* Create User Form */}
             {showCreateUser && (
@@ -559,39 +747,226 @@ export const AdminScreen: React.FC<{ onLogout: () => void }> = ({ onLogout }) =>
             )}
 
             {/* Users List */}
-            {users.map((u) => (
-              <View key={u.id} style={styles.userCard}>
-                <View style={styles.rowBetween}>
-                  <View>
-                    <Text style={styles.userName}>{u.fullName || u.username}</Text>
-                    <Text style={styles.userEmail}>{u.email}</Text>
+            {users
+              .filter((u) => {
+                if (!userSearch) return true;
+                const s = userSearch.toLowerCase();
+                return (
+                  (u.username && u.username.toLowerCase().includes(s)) ||
+                  (u.fullName && u.fullName.toLowerCase().includes(s)) ||
+                  (u.email && u.email.toLowerCase().includes(s)) ||
+                  (u.role && u.role.toLowerCase().includes(s))
+                );
+              })
+              .map((u) => {
+                const is2FA = u.totpEnabled || u.twoFactorMethod === 'email' || u.twoFactorMethod === 'totp';
+                return (
+                  <View key={u.id} style={styles.userCard}>
+                    <View style={styles.rowBetween}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.userName}>{u.fullName || u.username}</Text>
+                        <Text style={styles.userEmail}>{u.email}</Text>
+                      </View>
+                      <View style={[styles.statusBadge, u.status === 'deleted' && styles.statusBadgeDeleted]}>
+                        <Text style={styles.statusBadgeText}>
+                          {u.status === 'deleted' ? 'Soft Deleted' : 'Active'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Status & Verification Badges */}
+                    <View style={[styles.pillRow, { marginTop: 8 }]}>
+                      <View style={[styles.statusBadge, { backgroundColor: '#0284c7' }]}>
+                        <Text style={styles.statusBadgeText}>Role: {u.role}</Text>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          { backgroundColor: is2FA ? '#065f46' : '#78350f' },
+                        ]}
+                      >
+                        <Text style={styles.statusBadgeText}>
+                          {is2FA ? '2FA Enabled' : '2FA Disabled'}
+                        </Text>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          { backgroundColor: u.emailVerified ? '#065f46' : '#92400e' },
+                        ]}
+                      >
+                        <Text style={styles.statusBadgeText}>
+                          {u.emailVerified ? 'Email Verified' : 'Pending Verification'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Action Buttons Row */}
+                    <View style={[styles.rowBetween, { marginTop: 12, flexWrap: 'wrap', gap: 6 }]}>
+                      {!u.emailVerified && (
+                        <TouchableOpacity
+                          style={[styles.actionBtn, { backgroundColor: '#059669' }]}
+                          onPress={() => handleVerifyEmail(u)}
+                        >
+                          <Text style={styles.actionBtnText}>Verify Email</Text>
+                        </TouchableOpacity>
+                      )}
+
+                      <TouchableOpacity
+                        style={[styles.actionBtn, { backgroundColor: is2FA ? '#d97706' : '#2563eb' }]}
+                        onPress={() => handleToggle2FA(u)}
+                      >
+                        <Text style={styles.actionBtnText}>
+                          {is2FA ? 'Disable 2FA' : 'Enable 2FA'}
+                        </Text>
+                      </TouchableOpacity>
+
+                      {u.status === 'deleted' ? (
+                        <TouchableOpacity
+                          style={styles.restoreBtn}
+                          onPress={() => handleRestoreUser(u)}
+                        >
+                          <Text style={styles.restoreBtnText}>Restore</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          style={styles.softDeleteBtn}
+                          onPress={() => handleSoftDeleteUser(u)}
+                        >
+                          <Text style={styles.softDeleteBtnText}>Soft Delete</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   </View>
-                  <View style={[styles.statusBadge, u.status === 'deleted' && styles.statusBadgeDeleted]}>
-                    <Text style={styles.statusBadgeText}>
-                      {u.status === 'deleted' ? 'Soft Deleted' : 'Active'}
-                    </Text>
-                  </View>
-                </View>
-                <View style={[styles.rowBetween, { marginTop: 10 }]}>
-                  <Text style={styles.userRole}>Role: {u.role}</Text>
-                  {u.status === 'deleted' ? (
-                    <TouchableOpacity
-                      style={styles.restoreBtn}
-                      onPress={() => handleRestoreUser(u)}
-                    >
-                      <Text style={styles.restoreBtnText}>Restore</Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <TouchableOpacity
-                      style={styles.softDeleteBtn}
-                      onPress={() => handleSoftDeleteUser(u)}
-                    >
-                      <Text style={styles.softDeleteBtnText}>Soft Delete</Text>
-                    </TouchableOpacity>
-                  )}
+                );
+              })}
+          </View>
+        )}
+
+        {/* ========================================================= */}
+        {/* TAB: 2FA & ACCOUNT SECURITY SETTINGS                     */}
+        {/* ========================================================= */}
+        {activeTab === 'settings' && (
+          <View>
+            <Text style={styles.sectionHeading}>Two-Factor Authentication & Account Security</Text>
+            <Text style={styles.sectionSubtitle}>
+              Manage your secondary authentication factors: RFC 6238 TOTP App and Encrypted Email OTP.
+            </Text>
+
+            {/* Current 2FA Status Card */}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Current 2FA Status</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    currentUser?.totpEnabled || currentUser?.twoFactorMethod === 'email'
+                      ? { backgroundColor: '#064e3b' }
+                      : { backgroundColor: '#78350f' },
+                  ]}
+                >
+                  <Text style={styles.statusBadgeText}>
+                    {currentUser?.totpEnabled
+                      ? 'RFC 6238 TOTP Active (Authenticator App)'
+                      : currentUser?.twoFactorMethod === 'email'
+                      ? 'Email OTP Active'
+                      : '2FA Not Configured'}
+                  </Text>
                 </View>
               </View>
-            ))}
+
+              <Text style={[styles.cardSubtitle, { marginTop: 10 }]}>
+                Nina International requires Two-Factor Authentication for all administrative operations.
+              </Text>
+
+              {/* Action Buttons */}
+              <View style={{ marginTop: 14, gap: 10 }}>
+                <TouchableOpacity
+                  style={[styles.primaryBtn, { backgroundColor: '#0284c7' }]}
+                  onPress={handleSwitchToEmail2FA}
+                >
+                  <Text style={styles.primaryBtnText}>Use Email OTP (Verification via Inbox)</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.primaryBtn}
+                  onPress={handleStartTotpEnrollment}
+                  disabled={enrollingTotp}
+                >
+                  {enrollingTotp ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.primaryBtnText}>Setup Google Authenticator (TOTP App)</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* TOTP Enrollment Wizard */}
+            {totpData && (
+              <View style={[styles.card, { borderColor: '#3b82f6' }]}>
+                <Text style={[styles.cardTitle, { color: '#60a5fa' }]}>Setup Authenticator App</Text>
+                <Text style={styles.cardSubtitle}>
+                  Enter this manual setup key into Google Authenticator or Microsoft Authenticator:
+                </Text>
+
+                <View style={{ backgroundColor: '#1e293b', padding: 12, borderRadius: 8, marginTop: 8 }}>
+                  <Text style={[styles.mono, { fontSize: 14, textAlign: 'center', letterSpacing: 2 }]}>
+                    {totpData.manualEntryKey}
+                  </Text>
+                </View>
+
+                {totpData.recoveryCodes && totpData.recoveryCodes.length > 0 && (
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={[styles.cardSubtitle, { fontWeight: 'bold', color: '#f59e0b' }]}>
+                      Emergency Single-Use Recovery Codes:
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                      {totpData.recoveryCodes.map((code, idx) => (
+                        <View
+                          key={idx}
+                          style={{
+                            backgroundColor: '#1e293b',
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                            borderRadius: 4,
+                          }}
+                        >
+                          <Text style={[styles.mono, { fontSize: 11 }]}>{code}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                <TextInput
+                  style={[
+                    styles.input,
+                    { marginTop: 14, textAlign: 'center', fontSize: 18, letterSpacing: 6 },
+                  ]}
+                  placeholder="000000"
+                  placeholderTextColor="#64748b"
+                  keyboardType="numeric"
+                  maxLength={6}
+                  value={verifyTotpCode}
+                  onChangeText={setVerifyTotpCode}
+                />
+
+                <TouchableOpacity
+                  style={[styles.primaryBtn, enrollingTotp && styles.btnDisabled]}
+                  onPress={handleConfirmTotp}
+                  disabled={enrollingTotp}
+                >
+                  {enrollingTotp ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.primaryBtnText}>Verify & Activate TOTP</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
 
@@ -840,13 +1215,135 @@ const styles = StyleSheet.create({
   },
   metricLabel: {
     color: '#94a3b8',
-    fontSize: 12,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   metricValue: {
     color: '#38bdf8',
     fontSize: 22,
     fontWeight: 'bold',
     marginTop: 4,
+  },
+  metricSub: {
+    color: '#94a3b8',
+    fontSize: 10,
+    marginTop: 4,
+  },
+  bannerContainer: {
+    backgroundColor: '#0f172a',
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#1e3a8a',
+    marginBottom: 16,
+  },
+  bannerBadge: {
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    borderColor: 'rgba(96, 165, 250, 0.3)',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+  },
+  bannerBadgeText: {
+    color: '#93c5fd',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  bannerTitle: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 8,
+    letterSpacing: -0.3,
+  },
+  bannerDesc: {
+    color: '#94a3b8',
+    fontSize: 12,
+    marginTop: 6,
+    lineHeight: 18,
+  },
+  bannerBtnRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 14,
+  },
+  bannerBtnPrimary: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  bannerBtnPrimaryText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  bannerBtnSecondary: {
+    backgroundColor: '#1e293b',
+    borderColor: '#334155',
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  bannerBtnSecondaryText: {
+    color: '#cbd5e1',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  principlesContainer: {
+    backgroundColor: '#0f172a',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    marginBottom: 16,
+  },
+  principlesHeader: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+    paddingBottom: 10,
+    marginBottom: 12,
+  },
+  principlesTitle: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  principleCard: {
+    backgroundColor: '#1e293b',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  principle1Title: {
+    color: '#fbbf24',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  principle2Title: {
+    color: '#2dd4bf',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  principle3Title: {
+    color: '#38bdf8',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  principleText: {
+    color: '#cbd5e1',
+    fontSize: 11,
+    lineHeight: 16,
   },
   card: {
     backgroundColor: '#0f172a',
