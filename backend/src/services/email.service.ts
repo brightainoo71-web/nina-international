@@ -26,12 +26,15 @@ export class EmailService {
           host: ENV.SMTP_HOST,
           port: ENV.SMTP_PORT,
           secure: ENV.SMTP_SECURE, // true for 465, false for other ports
+          connectionTimeout: 5000,
+          greetingTimeout: 5000,
+          socketTimeout: 5000,
           auth: {
             user: ENV.SMTP_USER,
             pass: ENV.SMTP_PASS,
           },
           tls: {
-            rejectUnauthorized: ENV.NODE_ENV === 'production',
+            rejectUnauthorized: false,
           },
         });
         console.log(`[EmailService] Configured SMTP transporter for host: ${ENV.SMTP_HOST}:${ENV.SMTP_PORT}`);
