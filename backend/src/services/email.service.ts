@@ -86,6 +86,35 @@ export class EmailService {
     text: string;
     html: string;
   }): Promise<EmailSendResult> {
+    // 1. Check for HTTPS Email Webhook Relay (Bypasses Render free tier SMTP port block over Port 443)
+    const webhookUrl = process.env.EMAIL_WEBHOOK_URL;
+    if (webhookUrl) {
+      try {
+        const response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: options.to,
+            subject: options.subject,
+            text: options.text,
+            html: options.html,
+          }),
+        });
+
+        if (response.ok) {
+          console.log(`[EmailService] Live email dispatched via HTTPS Webhook to <${options.to}>`);
+          return {
+            success: true,
+            simulated: false,
+            messageId: `wh_${Date.now()}`,
+          };
+        }
+      } catch (whErr: any) {
+        console.error('[EmailService] Webhook email dispatch error:', whErr?.message || whErr);
+      }
+    }
+
+    // 2. Direct SMTP via Nodemailer
     const transporter = this.getTransporter();
 
     if (transporter && ENV.EMAIL_PROVIDER !== 'simulated') {
@@ -99,7 +128,7 @@ export class EmailService {
         });
 
         const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('SMTP connection timed out after 3000ms')), 3000)
+          setTimeout(() => reject(new Error('SMTP connection timed out after 12000ms')), 12000)
         );
 
         const info: any = await Promise.race([sendPromise, timeoutPromise]);
