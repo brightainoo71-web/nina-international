@@ -4,7 +4,7 @@
 // Use your machine's LAN IP or a deployed HTTPS URL.
 // ==========================================================
 
-export const DEFAULT_API_URL = 'https://robust-fundamental-absent-billy.trycloudflare.com/api';
+export const DEFAULT_API_URL = 'https://nina-international.onrender.com/api';
 
 class ApiConfigManager {
   private currentUrl = DEFAULT_API_URL;

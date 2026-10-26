@@ -7,9 +7,48 @@ import { UserProfile, PrivateCredentialMetadata } from '../types/shared.js';
 
 export async function seedDatabaseIfEmpty(): Promise<void> {
   await DatabaseService.initialize();
-  const existingUsers = await DatabaseService.getCollection<UserProfile>('userProfiles');
+  const now = new Date().toISOString();
+  let existingUsers = await DatabaseService.getCollection<UserProfile>('userProfiles');
 
-  if (existingUsers.length > 0) {
+  // Ensure Primary Administrator account always exists
+  const brightAdmin = existingUsers.find((u) => u.email === 'brightainoo71@gmail.com');
+  if (!brightAdmin) {
+    const brightId = 'usr_bright_admin_001';
+    const credResult = await CredentialService.hashPassword('P@ssword123!');
+    const privateCred: PrivateCredentialMetadata & { failedLoginAttempts: number } = {
+      userId: brightId,
+      algorithm: 'argon2id',
+      libraryVersion: '@node-rs/argon2 v2.0.2',
+      hashParams: credResult.hashParams,
+      salt: credResult.salt,
+      storedHash: credResult.storedHash,
+      pepperConfigured: true,
+      pepperVersion: credResult.pepperVersion,
+      createdAt: now,
+      updatedAt: now,
+      requiresRehash: false,
+      failedLoginAttempts: 0,
+    };
+    await DatabaseService.setDocument('privateCredentials', brightId, privateCred);
+    const brightProfile: UserProfile = {
+      id: brightId,
+      email: 'brightainoo71@gmail.com',
+      username: 'abtuniverse',
+      fullName: 'Bright Takyi (System Administrator)',
+      role: 'admin',
+      status: 'active',
+      emailVerified: true,
+      totpEnabled: false,
+      twoFactorMethod: 'email',
+      createdAt: now,
+      updatedAt: now,
+    };
+    await DatabaseService.setDocument('userProfiles', brightId, brightProfile);
+    console.log('[Seed] Primary admin brightainoo71@gmail.com provisioned.');
+    existingUsers = await DatabaseService.getCollection<UserProfile>('userProfiles');
+  }
+
+  if (existingUsers.length > 1) {
     console.log(`Database already populated (${existingUsers.length} users found). Skipping seed.`);
     return;
   }
