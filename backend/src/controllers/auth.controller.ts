@@ -141,7 +141,6 @@ export class AuthController {
       userId,
       email: normalizedEmail,
       emailDispatched: !emailResult.simulated,
-      simulatedVerificationOtp: otp.code, // Maintained for seamless demo / test inspection
     });
   }
 
@@ -261,9 +260,25 @@ export class AuthController {
 
     if (requires2FA) {
       const pendingToken = TokenService.generate2FAPendingToken(user);
-      const availableMethods = [];
+      const availableMethods: ('totp' | 'email')[] = [];
       if (user.totpEnabled) availableMethods.push('totp');
       availableMethods.push('email');
+
+      // Automatically generate and dispatch email 2FA OTP upon login
+      const otp = TwoFactorService.generateEmailOtp();
+      await DatabaseService.setDocument('authenticationChallenges', `2fa_email_${user.id}`, {
+        id: `2fa_email_${user.id}`,
+        userId: user.id,
+        type: 'email_2fa',
+        codeHash: otp.codeHash,
+        expiresAt: otp.expiresAt,
+        used: false,
+      });
+
+      // Dispatch live email via Gmail SMTP
+      EmailService.sendLoginOtp(user.email, user.fullName, otp.code, req.ip).catch(err => {
+        console.error('[AuthController] Failed to dispatch login OTP email:', err);
+      });
 
       return res.json({
         requires2FA: true,
@@ -330,7 +345,6 @@ export class AuthController {
       return res.json({
         message: 'Verification code sent to email.',
         emailDispatched,
-        simulatedOtp: otp.code, // Surface simulated OTP for fast seamless presentation/demo
       });
     } catch (err: any) {
       return res.status(401).json({ error: 'Unauthorized', message: 'Invalid or expired 2FA token.' });

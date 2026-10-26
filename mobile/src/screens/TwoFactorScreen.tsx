@@ -31,17 +31,14 @@ export const TwoFactorScreen: React.FC<TwoFactorScreenProps> = ({
   );
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
-  const [simulatedOtp, setSimulatedOtp] = useState<string | null>(null);
 
   const handleSendEmailOtp = async () => {
     setLoading(true);
     try {
-      const res = await MobileApiClient.post('/auth/2fa/send-email-otp', {
+      await MobileApiClient.post('/auth/2fa/send-email-otp', {
         twoFactorToken,
       });
-      setSimulatedOtp(res.simulatedOtp);
-      setCode(res.simulatedOtp); // Auto-fill for seamless testing
-      Alert.alert('Verification Code Sent', `Demo verification code: ${res.simulatedOtp}`);
+      Alert.alert('Verification Code Sent', 'A single-use 6-digit verification code has been dispatched to your registered email.');
     } catch (err: any) {
       Alert.alert('Error', err.message);
     } finally {
@@ -110,15 +107,8 @@ export const TwoFactorScreen: React.FC<TwoFactorScreenProps> = ({
             disabled={loading}
             onPress={handleSendEmailOtp}
           >
-            <Text style={styles.sendEmailText}>Request Email OTP Code</Text>
+            <Text style={styles.sendEmailText}>Resend Email OTP Code</Text>
           </TouchableOpacity>
-        )}
-
-        {simulatedOtp && (
-          <View style={styles.otpBanner}>
-            <Text style={styles.otpBannerLabel}>Dispatched Demo Code:</Text>
-            <Text style={styles.otpBannerCode}>{simulatedOtp}</Text>
-          </View>
         )}
 
         <Text style={styles.inputLabel}>

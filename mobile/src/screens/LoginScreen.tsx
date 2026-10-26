@@ -18,16 +18,11 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onRequires2FA, onLoginSuccess }) => {
-  const [identifier, setIdentifier] = useState('admin@ninainternational.edu');
-  const [password, setPassword] = useState('NinaSecurePass2026!');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [serverUrl, setServerUrl] = useState(ApiConfig.getBaseUrl());
   const [showConfig, setShowConfig] = useState(false);
-
-  const handleQuickSelect = (email: string) => {
-    setIdentifier(email);
-    setPassword('NinaSecurePass2026!');
-  };
 
   const handleLogin = async () => {
     if (!identifier || !password) {
@@ -113,44 +108,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onRequires2FA, onLogin
             <Text style={styles.buttonText}>Authenticate Securely</Text>
           )}
         </TouchableOpacity>
-
-        {/* Demo Fast Login Buttons */}
-        <View style={styles.demoSection}>
-          <Text style={styles.demoTitle}>Fast Academic Demonstration Accounts:</Text>
-          <View style={styles.demoGrid}>
-            <TouchableOpacity
-              style={styles.demoBtn}
-              onPress={() => handleQuickSelect('admin@ninainternational.edu')}
-            >
-              <Text style={styles.demoBtnRole}>Admin</Text>
-              <Text style={styles.demoBtnEmail}>admin@...</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.demoBtn}
-              onPress={() => handleQuickSelect('teacher.mensah@ninainternational.edu')}
-            >
-              <Text style={[styles.demoBtnRole, { color: '#10b981' }]}>Teacher</Text>
-              <Text style={styles.demoBtnEmail}>teacher@...</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.demoBtn}
-              onPress={() => handleQuickSelect('staff.akosua@ninainternational.edu')}
-            >
-              <Text style={[styles.demoBtnRole, { color: '#a855f7' }]}>Staff</Text>
-              <Text style={styles.demoBtnEmail}>staff@...</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.demoBtn}
-              onPress={() => handleQuickSelect('student.kofi@ninainternational.edu')}
-            >
-              <Text style={[styles.demoBtnRole, { color: '#14b8a6' }]}>Student</Text>
-              <Text style={styles.demoBtnEmail}>student@...</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
 
         {/* Network URL Settings Toggle */}
         <TouchableOpacity

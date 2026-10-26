@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   RefreshCw,
   QrCode,
-  Sparkles,
   Eye,
   EyeOff,
 } from 'lucide-react';
@@ -36,7 +35,6 @@ export const AuthView: React.FC = () => {
   const [availableMethods, setAvailableMethods] = useState<string[]>([]);
   const [selectedMethod, setSelectedMethod] = useState<'totp' | 'email'>('email');
   const [twoFactorCode, setTwoFactorCode] = useState('');
-  const [simulatedEmailOtp, setSimulatedEmailOtp] = useState<string | null>(null);
 
   // Register form state
   const [regFullName, setRegFullName] = useState('');
@@ -57,12 +55,6 @@ export const AuthView: React.FC = () => {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [resetStep, setResetStep] = useState<'request' | 'reset'>('request');
 
-  const handleQuickLogin = (email: string) => {
-    setIdentifier(email);
-    setPassword('NinaSecurePass2026!');
-    setError(null);
-  };
-
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -75,6 +67,7 @@ export const AuthView: React.FC = () => {
         setTwoFactorToken(res.twoFactorToken);
         setAvailableMethods(res.availableMethods || ['email']);
         setSelectedMethod(res.availableMethods?.includes('totp') ? 'totp' : 'email');
+        setSuccessMsg('Security Verification Required: A 6-digit verification code has been dispatched to your email address.');
       }
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check your credentials.');
@@ -87,9 +80,8 @@ export const AuthView: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
-      const res = await ApiClient.post<any>('/auth/2fa/send-email-otp', { twoFactorToken });
-      setSimulatedEmailOtp(res.simulatedOtp);
-      setSuccessMsg(`Verification code dispatched! For presentation/testing: ${res.simulatedOtp}`);
+      await ApiClient.post<any>('/auth/2fa/send-email-otp', { twoFactorToken });
+      setSuccessMsg('A new verification code has been dispatched to your registered email address.');
     } catch (err: any) {
       setError(err.message || 'Could not send verification code');
     } finally {
@@ -125,8 +117,8 @@ export const AuthView: React.FC = () => {
         role: regRole,
       });
       setRegisteredUserId(res.userId);
-      setEmailVerifyCode(res.simulatedVerificationOtp || '');
-      setSuccessMsg('Account registered! Please complete email verification.');
+      setEmailVerifyCode('');
+      setSuccessMsg('Account registered successfully! A 6-digit verification code has been sent to your email.');
       setMode('verify_email');
     } catch (err: any) {
       setError(err.message || 'Registration failed');
@@ -274,24 +266,19 @@ export const AuthView: React.FC = () => {
               </div>
 
               {selectedMethod === 'email' && (
-                <div className="mb-4">
+                <div className="mb-4 p-3 bg-slate-800/60 border border-slate-700/60 rounded-lg text-center">
+                  <p className="text-xs text-slate-300 mb-2">
+                    A single-use 6-digit code has been sent to your registered email address.
+                  </p>
                   <button
                     type="button"
                     onClick={handleRequestEmailOtp}
                     disabled={loading}
-                    className="w-full py-2 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-medium text-slate-200 flex items-center justify-center space-x-2 transition-all"
+                    className="inline-flex items-center space-x-1.5 text-xs text-blue-400 hover:text-blue-300 font-medium transition-colors"
                   >
-                    <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-                    <span>Send Verification Code to Email</span>
+                    <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+                    <span>Resend code to email</span>
                   </button>
-                  {simulatedEmailOtp && (
-                    <div className="mt-2 p-2 bg-blue-950/60 border border-blue-800/50 rounded text-center">
-                      <span className="text-[11px] text-blue-300 block">Demonstration OTP Token:</span>
-                      <span className="text-sm font-mono font-bold text-amber-300 tracking-wider">
-                        {simulatedEmailOtp}
-                      </span>
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -401,58 +388,8 @@ export const AuthView: React.FC = () => {
                 </button>
               </form>
 
-              {/* DEMO / TEST ACCOUNT QUICK-FILL BUTTONS */}
-              <div className="mt-6 pt-5 border-t border-slate-800">
-                <div className="flex items-center space-x-1 mb-2">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="text-[11px] font-semibold text-slate-300">
-                    Fast Academic Demonstration Accounts:
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-[10px]">
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('admin@ninainternational.edu')}
-                    className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 rounded text-left transition-colors"
-                  >
-                    <span className="font-bold text-blue-400 block">Administrator</span>
-                    <span className="text-slate-400 text-[9px] truncate block">admin@ninainternational.edu</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('teacher.mensah@ninainternational.edu')}
-                    className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 rounded text-left transition-colors"
-                  >
-                    <span className="font-bold text-emerald-400 block">Teacher</span>
-                    <span className="text-slate-400 text-[9px] truncate block">teacher.mensah@...</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('staff.akosua@ninainternational.edu')}
-                    className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 rounded text-left transition-colors"
-                  >
-                    <span className="font-bold text-purple-400 block">School Staff</span>
-                    <span className="text-slate-400 text-[9px] truncate block">staff.akosua@...</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('student.kofi@ninainternational.edu')}
-                    className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 rounded text-left transition-colors"
-                  >
-                    <span className="font-bold text-teal-400 block">Student</span>
-                    <span className="text-slate-400 text-[9px] truncate block">student.kofi@...</span>
-                  </button>
-                </div>
-                <div className="mt-2 text-center text-[10px] text-slate-500 font-mono">
-                  Default Demo Password: <span className="text-slate-300">NinaSecurePass2026!</span>
-                </div>
-              </div>
-
               {/* Mode switch */}
-              <div className="mt-5 text-center text-xs text-slate-400">
+              <div className="mt-6 text-center text-xs text-slate-400">
                 Need an account?{' '}
                 <button
                   type="button"
