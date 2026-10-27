@@ -96,10 +96,10 @@ app.use((req, res) => {
 
 // Central Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Unhandled Application Error:', err.message);
+  console.error('Unhandled Application Error:', err.message, err.stack);
   res.status(500).json({
     error: 'Internal Server Error',
-    message: ENV.NODE_ENV === 'production' ? 'An unexpected error occurred.' : err.message,
+    message: err.message || 'An unexpected error occurred.',
   });
 });
 

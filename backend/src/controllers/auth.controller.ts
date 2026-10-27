@@ -188,166 +188,178 @@ export class AuthController {
    * Step 1: Login with Email/Username + Password
    */
   public static async login(req: Request, res: Response) {
-    const { identifier, password } = req.body;
-    if (!identifier || !password) {
-      return res.status(400).json({ error: 'Validation Error', message: 'Identifier and password are required.' });
-    }
+    try {
+      const { identifier, password } = req.body;
+      if (!identifier || !password) {
+        return res.status(400).json({ error: 'Validation Error', message: 'Identifier and password are required.' });
+      }
 
-    const cleanId = identifier.trim().toLowerCase();
-    const users = await DatabaseService.getCollection<UserProfile>('userProfiles');
-    const user = users.find(u => u.email.toLowerCase() === cleanId || u.username.toLowerCase() === cleanId);
+      const cleanId = identifier.trim().toLowerCase();
+      const users = await DatabaseService.getCollection<UserProfile>('userProfiles');
+      const user = users.find(
+        u =>
+          (u.email && u.email.toLowerCase() === cleanId) ||
+          (u.username && u.username.toLowerCase() === cleanId)
+      );
 
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid Credentials', message: 'Invalid identifier or password.' });
-    }
+      if (!user) {
+        return res.status(401).json({ error: 'Invalid Credentials', message: 'Invalid identifier or password.' });
+      }
 
-    if (user.status === 'deleted') {
-      return res.status(403).json({
-        error: 'Account Deactivated',
-        message: 'This account has been deactivated. Please contact the administrator.',
-      });
-    }
+      if (user.status === 'deleted') {
+        return res.status(403).json({
+          error: 'Account Deactivated',
+          message: 'This account has been deactivated. Please contact the administrator.',
+        });
+      }
 
-    if (user.status === 'suspended') {
-      return res.status(403).json({
-        error: 'Account Suspended',
-        message: 'This account is currently suspended. Please contact administration.',
-      });
-    }
+      if (user.status === 'suspended') {
+        return res.status(403).json({
+          error: 'Account Suspended',
+          message: 'This account is currently suspended. Please contact administration.',
+        });
+      }
 
-    const creds = await DatabaseService.getDocument<any>('privateCredentials', user.id);
-    if (!creds || !creds.storedHash) {
-      return res.status(500).json({ error: 'Server Error', message: 'Credential record not found.' });
-    }
+      const creds = await DatabaseService.getDocument<any>('privateCredentials', user.id);
+      if (!creds || !creds.storedHash) {
+        return res.status(500).json({ error: 'Server Error', message: 'Credential record not found.' });
+      }
 
-    // Check brute-force lockout
-    if (creds.lockoutUntil && new Date(creds.lockoutUntil) > new Date()) {
-      return res.status(429).json({
-        error: 'Account Locked',
-        message: 'Too many failed login attempts. Account locked for 15 minutes.',
-      });
-    }
+      // Check brute-force lockout
+      if (creds.lockoutUntil && new Date(creds.lockoutUntil) > new Date()) {
+        return res.status(429).json({
+          error: 'Account Locked',
+          message: 'Too many failed login attempts. Account locked for 15 minutes.',
+        });
+      }
 
-    // Verify Argon2id hash using keyed HMAC server pepper
-    const passwordValid = await CredentialService.verifyPassword(
-      password,
-      creds.storedHash,
-      creds.pepperVersion
-    );
+      // Verify Argon2id hash using keyed HMAC server pepper
+      const passwordValid = await CredentialService.verifyPassword(
+        password,
+        creds.storedHash,
+        creds.pepperVersion
+      );
 
-    if (!passwordValid) {
-      const attempts = (creds.failedLoginAttempts || 0) + 1;
-      const lockout = attempts >= 5 ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : null;
+      if (!passwordValid) {
+        const attempts = (creds.failedLoginAttempts || 0) + 1;
+        const lockout = attempts >= 5 ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : null;
 
+        await DatabaseService.updateDocument('privateCredentials', user.id, {
+          failedLoginAttempts: attempts,
+          lockoutUntil: lockout,
+        });
+
+        await AuditService.logEvent({
+          actorId: user.id,
+          actorRole: user.role,
+          actorEmail: user.email,
+          action: 'LOGIN_FAILED_PASSWORD_MISMATCH',
+          resource: 'auth/login',
+          outcome: 'failure',
+          details: { attempts },
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent'),
+        });
+
+        return res.status(401).json({ error: 'Invalid Credentials', message: 'Invalid identifier or password.' });
+      }
+
+      // Reset failed attempts on success
       await DatabaseService.updateDocument('privateCredentials', user.id, {
-        failedLoginAttempts: attempts,
-        lockoutUntil: lockout,
+        failedLoginAttempts: 0,
+        lockoutUntil: null,
+        lastVerifiedAt: new Date().toISOString(),
+      });
+
+      // 1. Mandatory Email Verification Check: Unverified users cannot enter the system
+      if (!user.emailVerified) {
+        const otp = TwoFactorService.generateEmailOtp();
+        await DatabaseService.setDocument('authenticationChallenges', `otp_${user.id}`, {
+          id: `otp_${user.id}`,
+          userId: user.id,
+          type: 'email_verification',
+          codeHash: otp.codeHash,
+          expiresAt: otp.expiresAt,
+          used: false,
+        });
+
+        // Re-dispatch verification code in background
+        EmailService.sendVerificationOtp(user.email, user.fullName, otp.code).catch(err => {
+          console.error('[AuthController] Failed to dispatch verification email:', err);
+        });
+
+        return res.status(403).json({
+          error: 'Email Not Verified',
+          message: 'Your email address is pending verification. A fresh 6-digit verification code has been dispatched to your email.',
+          requiresEmailVerification: true,
+          userId: user.id,
+          email: user.email,
+        });
+      }
+
+      // 2. Determine 2FA Requirement: Enforced system-wide across all user roles (Students, Teachers, Staff, Admins)
+      const requires2FA = user.twoFactorMethod !== 'none' || user.totpEnabled || ['admin', 'teacher', 'staff', 'student'].includes(user.role);
+
+      if (requires2FA) {
+        const pendingToken = TokenService.generate2FAPendingToken(user);
+        const availableMethods: ('totp' | 'email')[] = [];
+        if (user.totpEnabled) availableMethods.push('totp');
+        availableMethods.push('email');
+
+        // Automatically generate and dispatch email 2FA OTP upon login
+        const otp = TwoFactorService.generateEmailOtp();
+        await DatabaseService.setDocument('authenticationChallenges', `2fa_email_${user.id}`, {
+          id: `2fa_email_${user.id}`,
+          userId: user.id,
+          type: 'email_2fa',
+          codeHash: otp.codeHash,
+          expiresAt: otp.expiresAt,
+          used: false,
+        });
+
+        // Dispatch live email in background without blocking authentication response
+        EmailService.sendLoginOtp(user.email, user.fullName, otp.code, req.ip).catch(err => {
+          console.error('[AuthController] Failed to dispatch login OTP email:', err);
+        });
+
+        return res.json({
+          requires2FA: true,
+          twoFactorToken: pendingToken,
+          availableMethods,
+          user: { id: user.id, email: user.email, username: user.username, role: user.role },
+        });
+      }
+
+      // If 2FA not required, issue full access token
+      const accessToken = TokenService.generateAccessToken(user);
+      await DatabaseService.updateDocument<UserProfile>('userProfiles', user.id, {
+        lastLoginAt: new Date().toISOString(),
       });
 
       await AuditService.logEvent({
         actorId: user.id,
         actorRole: user.role,
         actorEmail: user.email,
-        action: 'LOGIN_FAILED_PASSWORD_MISMATCH',
+        action: 'LOGIN_SUCCESS',
         resource: 'auth/login',
-        outcome: 'failure',
-        details: { attempts },
+        outcome: 'success',
+        details: { twoFactorUsed: false },
         ipAddress: req.ip,
         userAgent: req.get('user-agent'),
       });
 
-      return res.status(401).json({ error: 'Invalid Credentials', message: 'Invalid identifier or password.' });
-    }
-
-    // Reset failed attempts on success
-    await DatabaseService.updateDocument('privateCredentials', user.id, {
-      failedLoginAttempts: 0,
-      lockoutUntil: null,
-      lastVerifiedAt: new Date().toISOString(),
-    });
-
-    // 1. Mandatory Email Verification Check: Unverified users cannot enter the system
-    if (!user.emailVerified) {
-      const otp = TwoFactorService.generateEmailOtp();
-      await DatabaseService.setDocument('authenticationChallenges', `otp_${user.id}`, {
-        id: `otp_${user.id}`,
-        userId: user.id,
-        type: 'email_verification',
-        codeHash: otp.codeHash,
-        expiresAt: otp.expiresAt,
-        used: false,
-      });
-
-      // Re-dispatch verification code in background
-      EmailService.sendVerificationOtp(user.email, user.fullName, otp.code).catch(err => {
-        console.error('[AuthController] Failed to dispatch verification email:', err);
-      });
-
-      return res.status(403).json({
-        error: 'Email Not Verified',
-        message: 'Your email address is pending verification. A fresh 6-digit verification code has been dispatched to your email.',
-        requiresEmailVerification: true,
-        userId: user.id,
-        email: user.email,
-      });
-    }
-
-    // 2. Determine 2FA Requirement: Enforced system-wide across all user roles (Students, Teachers, Staff, Admins)
-    const requires2FA = user.twoFactorMethod !== 'none' || user.totpEnabled || ['admin', 'teacher', 'staff', 'student'].includes(user.role);
-
-    if (requires2FA) {
-      const pendingToken = TokenService.generate2FAPendingToken(user);
-      const availableMethods: ('totp' | 'email')[] = [];
-      if (user.totpEnabled) availableMethods.push('totp');
-      availableMethods.push('email');
-
-      // Automatically generate and dispatch email 2FA OTP upon login
-      const otp = TwoFactorService.generateEmailOtp();
-      await DatabaseService.setDocument('authenticationChallenges', `2fa_email_${user.id}`, {
-        id: `2fa_email_${user.id}`,
-        userId: user.id,
-        type: 'email_2fa',
-        codeHash: otp.codeHash,
-        expiresAt: otp.expiresAt,
-        used: false,
-      });
-
-      // Dispatch live email in background without blocking authentication response
-      EmailService.sendLoginOtp(user.email, user.fullName, otp.code, req.ip).catch(err => {
-        console.error('[AuthController] Failed to dispatch login OTP email:', err);
-      });
-
       return res.json({
-        requires2FA: true,
-        twoFactorToken: pendingToken,
-        availableMethods,
-        user: { id: user.id, email: user.email, username: user.username, role: user.role },
+        requires2FA: false,
+        accessToken,
+        user,
+      });
+    } catch (loginErr: any) {
+      console.error('[AuthController.login] Unexpected error:', loginErr);
+      return res.status(500).json({
+        error: 'Internal Server Error',
+        message: loginErr?.message || 'Login encountered an unexpected error.',
       });
     }
-
-    // If 2FA not required, issue full access token
-    const accessToken = TokenService.generateAccessToken(user);
-    await DatabaseService.updateDocument<UserProfile>('userProfiles', user.id, {
-      lastLoginAt: new Date().toISOString(),
-    });
-
-    await AuditService.logEvent({
-      actorId: user.id,
-      actorRole: user.role,
-      actorEmail: user.email,
-      action: 'LOGIN_SUCCESS',
-      resource: 'auth/login',
-      outcome: 'success',
-      details: { twoFactorUsed: false },
-      ipAddress: req.ip,
-      userAgent: req.get('user-agent'),
-    });
-
-    return res.json({
-      requires2FA: false,
-      accessToken,
-      user,
-    });
   }
 
   /**
