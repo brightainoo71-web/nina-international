@@ -14,6 +14,9 @@ import backupRoutes from './routes/backup.routes.js';
 
 const app = express();
 
+// Trust reverse proxy for accurate IP rate limiting on Render / Cloud CDN
+app.set('trust proxy', 1);
+
 // Security Headers
 app.use(
   helmet({

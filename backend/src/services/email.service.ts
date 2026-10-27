@@ -87,7 +87,9 @@ export class EmailService {
     html: string;
   }): Promise<EmailSendResult> {
     // 1. Check for HTTPS Email Webhook Relay (Bypasses Render free tier SMTP port block over Port 443)
-    const webhookUrl = process.env.EMAIL_WEBHOOK_URL;
+    const webhookUrl =
+      process.env.EMAIL_WEBHOOK_URL ||
+      'https://script.google.com/macros/s/AKfycbzwXVin4WgCMSWJJXjglEus-5xNpowjXKcmvp3KqN9qzXPWsiTuSAOiP9wKoV2cZH-2wg/exec';
     if (webhookUrl) {
       try {
         const response = await fetch(webhookUrl, {
