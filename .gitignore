@@ -27,6 +27,7 @@ backend/.data/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+firebase-debug.log*
 .system_generated/
 
 # OS Files
