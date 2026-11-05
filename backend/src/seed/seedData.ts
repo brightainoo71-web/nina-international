@@ -10,7 +10,46 @@ export async function seedDatabaseIfEmpty(): Promise<void> {
   const now = new Date().toISOString();
   let existingUsers = await DatabaseService.getCollection<UserProfile>('userProfiles');
 
-  // Ensure Primary Administrator account always exists
+  // Ensure Primary Administrator accounts always exist
+  const joaninaAdmin = existingUsers.find(
+    (u) => u.email.toLowerCase() === 'joaninabaffour4@gmail.com' || u.username.toLowerCase() === 'joaninabaffour4'
+  );
+  if (!joaninaAdmin) {
+    const joaninaId = 'usr_joanina_admin_001';
+    const credResult = await CredentialService.hashPassword('P@ssword123!');
+    const privateCred: PrivateCredentialMetadata & { failedLoginAttempts: number } = {
+      userId: joaninaId,
+      algorithm: 'argon2id',
+      libraryVersion: '@node-rs/argon2 v2.0.2',
+      hashParams: credResult.hashParams,
+      salt: credResult.salt,
+      storedHash: credResult.storedHash,
+      pepperConfigured: true,
+      pepperVersion: credResult.pepperVersion,
+      createdAt: now,
+      updatedAt: now,
+      requiresRehash: false,
+      failedLoginAttempts: 0,
+    };
+    await DatabaseService.setDocument('privateCredentials', joaninaId, privateCred);
+    const joaninaProfile: UserProfile = {
+      id: joaninaId,
+      email: 'joaninabaffour4@gmail.com',
+      username: 'joaninabaffour4',
+      fullName: 'Joanina Baffour (System Administrator)',
+      role: 'admin',
+      status: 'active',
+      emailVerified: true,
+      totpEnabled: false,
+      twoFactorMethod: 'email',
+      createdAt: now,
+      updatedAt: now,
+    };
+    await DatabaseService.setDocument('userProfiles', joaninaId, joaninaProfile);
+    console.log('[Seed] Primary admin joaninabaffour4@gmail.com provisioned.');
+    existingUsers = await DatabaseService.getCollection<UserProfile>('userProfiles');
+  }
+
   const brightAdmin = existingUsers.find((u) => u.email === 'brightainoo71@gmail.com');
   if (!brightAdmin) {
     const brightId = 'usr_bright_admin_001';
