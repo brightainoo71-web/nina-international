@@ -87,9 +87,18 @@ export class EmailService {
     html: string;
   }): Promise<EmailSendResult> {
     // 1. Check for HTTPS Email Webhook Relay (Bypasses Render free tier SMTP port block over Port 443)
-    const webhookUrl =
-      process.env.EMAIL_WEBHOOK_URL ||
+    const JOANINA_WEBHOOK_URL =
       'https://script.google.com/macros/s/AKfycbw2f0vEbogKvhjoJRvOomPN_oelUvD2aBBMf7pDHa-WKF-XchTEtsIVTYldM5mJbtlY/exec';
+
+    // Strictly enforce Joanina's sender relay and automatically discard any legacy Bright webhook
+    let webhookUrl = JOANINA_WEBHOOK_URL;
+    if (
+      process.env.EMAIL_WEBHOOK_URL &&
+      !process.env.EMAIL_WEBHOOK_URL.includes('AKfycbzwXVin4WgCMSWJJXjglEus')
+    ) {
+      webhookUrl = process.env.EMAIL_WEBHOOK_URL;
+    }
+
     if (webhookUrl) {
       try {
         const response = await fetch(webhookUrl, {

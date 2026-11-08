@@ -33,3 +33,5 @@ services:
         value: eu-north-1
       - key: AWS_S3_BACKUP_BUCKET
         value: nina--securebackups
+      - key: EMAIL_WEBHOOK_URL
+        value: https://script.google.com/macros/s/AKfycbw2f0vEbogKvhjoJRvOomPN_oelUvD2aBBMf7pDHa-WKF-XchTEtsIVTYldM5mJbtlY/exec
