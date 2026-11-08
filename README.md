@@ -10,7 +10,11 @@
 
 ---
 
-## 🌟 Key Security & Engineering Features
+## 🌐 Live Production Deployments
+- **Primary Web Portal**: [https://nina-international.vercel.app](https://nina-international.vercel.app)
+- **Secondary Web CDN**: [https://nina-international-school.web.app](https://nina-international-school.web.app)
+- **Backend API**: [https://nina-international.onrender.com/api](https://nina-international.onrender.com/api)
+- **API Health Check**: [https://nina-international.vercel.app/api/health](https://nina-international.vercel.app/api/health)
 
 1. **Academic Password Salt & Pepper Mechanism**:
    - Implementation using vetted `@node-rs/argon2` (Argon2id v19).
